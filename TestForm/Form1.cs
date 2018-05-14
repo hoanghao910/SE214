@@ -19,278 +19,17 @@ namespace MainForm
             InitializeComponent();
         }
 
-        public List<string> listFile = new List<string>();
+        private string path = "";
 
-        DirectoryInfo directoryInfoC = new DirectoryInfo(@"C:\");
-        DirectoryInfo directoryInfoD = new DirectoryInfo(@"D:\");
         private void Form1_Load(object sender, EventArgs e)
         {
-            loadDirectories(directoryInfoC, treeView.Nodes[0]);
-            loadDirectories(directoryInfoD, treeView.Nodes[1]);
-            //if (Directory.Exists(@"C:\"))
-            //{
-            //    try
-            //    {
-            //        DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-
-            //        foreach (FileInfo file in directoryInfoC.GetFiles())
-            //        {
-            //            if (file.Exists)
-            //            {
-            //                TreeNode nodes = treeView.Nodes[0].Nodes.Add(file.Name);
-            //                SetImageExtension(file.Name, nodes);
-            //            }
-            //        }
-
-            //        if (directories.Length > 0)
-            //        {
-            //            foreach (DirectoryInfo directory in directories)
-            //            {
-            //                TreeNode node = treeView.Nodes[0].Nodes.Add(directory.Name);
-            //                node.ImageIndex = node.SelectedImageIndex = 0;
-            //                foreach (FileInfo file in directory.GetFiles())
-            //                {
-            //                    if (file.Exists)
-            //                    {
-            //                        TreeNode nodes = treeView.Nodes[0].Nodes[node.Index].Nodes.Add(file.Name);
-            //                        SetImageExtension(file.Name, nodes);
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show(ex.Message);
-            //    }
-            //}
-            //if (Directory.Exists(@"D:\"))
-            //{
-            //    try
-            //    {
-            //        DirectoryInfo[] directories = directoryInfoD.GetDirectories();
-
-            //        foreach (FileInfo file in directoryInfoD.GetFiles())
-            //        {
-            //            if (file.Exists)
-            //            {
-            //                TreeNode nodes = treeView.Nodes[1].Nodes.Add(file.Name);
-            //                SetImageExtension(file.Name, nodes);
-            //            }
-            //        }
-
-            //        if (directories.Length > 0)
-            //        {
-            //            foreach (DirectoryInfo directory in directories)
-            //            {
-            //                TreeNode node = treeView.Nodes[1].Nodes.Add(directory.Name);
-            //                node.ImageIndex = node.SelectedImageIndex = 0;
-            //                foreach (FileInfo file in directory.GetFiles())
-            //                {
-            //                    if (file.Exists)
-            //                    {
-            //                        TreeNode nodes = treeView.Nodes[1].Nodes[node.Index].Nodes.Add(file.Name);
-            //                        SetImageExtension(file.Name, nodes);
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show(ex.Message);
-            //    }
-            //}
-
-            //listViewLoad("");
-        }
-
-        private void toolStripMenuItemCopy_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                try
-                {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    foreach (FileInfo file in directoryInfoC.GetFiles())
-                    {
-                        if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                        {
-                            StringCollection filePath = new StringCollection();
-                            filePath.Add(file.FullName);
-                            Clipboard.SetFileDropList(filePath);
-                        }
-                    }
-
-                    if (directories.Length > 0)
-                    {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            if (directory.Name == treeView.SelectedNode.Text)
-                            {
-                                StringCollection folderPath = new StringCollection();
-                                folderPath.Add(directory.FullName);
-                                Clipboard.SetFileDropList(folderPath);
-                            }
-
-                            foreach (FileInfo file in directory.GetFiles())
-                            {
-                                if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                                {
-                                    StringCollection filePath = new StringCollection();
-                                    filePath.Add(file.FullName);
-                                    Clipboard.SetFileDropList(filePath);
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-            }
-        }
-
-        private void toolStripMenuItemPaste_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                bool copy = false;
-                try
-                {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    if (directories.Length > 0)
-                    {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            if (directory.Name == treeView.SelectedNode.Text && Clipboard.ContainsFileDropList())
-                            {
-                                foreach (string file in Clipboard.GetFileDropList())
-                                {
-                                    string targetDir = directoryInfoC.FullName + @"\" + directory.Name;
-                                    File.Copy(Path.Combine(file.Replace(Path.GetFileName(file), ""), Path.GetFileName(file)), Path.Combine(targetDir, Path.GetFileName(file)), true);
-                                }
-                                copy = true;
-                            }
-                        }
-                    }
-
-                    if (copy)
-                    {
-                        foreach (string file in Clipboard.GetFileDropList())
-                        {
-                            TreeNode node = treeView.Nodes[0].Nodes[treeView.SelectedNode.Index].Nodes.Add(Path.GetFileName(file));
-                            SetImageExtension(file, node);
-                        }
-                        copy = false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    copy = false;
-                    MessageBox.Show(ex.Message);
-                }
-            }
-        }
-
-        private void toolStripMenuItemDelete_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                bool deleted = false;
-                try
-                {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    foreach (FileInfo file in directoryInfoC.GetFiles())
-                    {
-                        if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                        {
-                            file.Delete();
-                            deleted = true;
-                        }
-                    }
-
-                    if (directories.Length > 0)
-                    {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            foreach (FileInfo file in directory.GetFiles())
-                            {
-                                if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                                {
-                                    file.Delete();
-                                    deleted = true;
-                                }
-                            }
-
-                            if (treeView.SelectedNode.Text == directory.Name)
-                            {
-                                foreach (FileInfo file in directory.GetFiles())
-                                {
-                                    if (file.Exists)
-                                        file.Delete();
-                                }
-                                directory.Delete();
-                                deleted = true;
-                            }
-                        }
-                    }
-
-                    if (deleted)
-                        treeView.SelectedNode.Remove();
-                }
-                catch (Exception ex)
-                {
-                    deleted = false;
-                    MessageBox.Show(ex.Message);
-                }
-            }
-        }
-
-        ExplorerProperties properties;
-        private void toolStripMenuItemProperties_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                if (properties != null)
-                    properties.Close();
-
-                DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-
-                foreach (DirectoryInfo directory in directories)
-                {
-                    if (!treeView.SelectedNode.Text.Contains(".")) // Folder, not a file
-                    {
-                        if (directory.Name == treeView.SelectedNode.Text)
-                        {
-                            properties = new ExplorerProperties(directory.Name, directory.FullName, CalculateBytes(directory.GetFiles("*.*", SearchOption.AllDirectories).Sum(file => file.Length)) + " (" + directory.GetFiles("*.*", SearchOption.AllDirectories).Sum(file => file.Length).ToString() + " bytes)");
-                            properties.Show();
-                        }
-                    }
-                    else
-                    {
-                        foreach (FileInfo file in directoryInfoC.GetFiles())
-                        {
-                            if (file.Name == treeView.SelectedNode.Text)
-                            {
-                                properties = new ExplorerProperties(file.Name, file.FullName, CalculateBytes(file.Length) + " (" + file.Length + " bytes)");
-                                properties.Show();
-                                return;
-                            }
-                        }
-
-                        foreach (FileInfo file in directory.GetFiles())
-                        {
-                            if (file.Name == treeView.SelectedNode.Text)
-                            {
-                                properties = new ExplorerProperties(file.Name, file.FullName, CalculateBytes(file.Length) + " (" + file.Length + " bytes)");
-                                properties.Show();
-                            }
-                        }
-                    }
-                }
-            }
+            TreeNode rootC = new TreeNode(@"C:\");
+            TreeNode rootD = new TreeNode(@"D:\");
+            treeView.Nodes.Add(rootC);
+            treeView.Nodes.Add(rootD);
+            FillChildNodes(rootC);
+            FillChildNodes(rootD);
+            //treeView.Nodes[0].Expand();
         }
 
         #region Calculation
@@ -316,104 +55,85 @@ namespace MainForm
         }
         #endregion
 
-        private void treeView_AfterSelect(object sender, TreeViewEventArgs e)
+        public void FillChildNodes(TreeNode node)
         {
-            listViewLoad(treeView_GetPathOfNode(e.Node));
-
+            try
+            {
+                DirectoryInfo dirs = new DirectoryInfo(node.FullPath);
+                foreach (DirectoryInfo dir in dirs.GetDirectories())
+                {
+                    TreeNode newnode = new TreeNode(dir.Name);
+                    node.Nodes.Add(newnode);
+                    newnode.Nodes.Add("*");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message.ToString());
+            }
         }
 
-        private string treeView_GetPathOfNode(TreeNode node)
+        private void treeView_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
-            if (node.Text != "C" && node.Text != "D")
+            if (e.Node.Nodes[0].Text == "*")
             {
-                return treeView_GetPathOfNode(node.Parent) + @"\" + node.Text;
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
             }
+        }
+
+        private void treeView_BeforeSelect(object sender, TreeViewCancelEventArgs e)
+        {
+            //string path = e.Node.Text;
+            path = "";
+            string pathSelectedNode = getPath(e.Node);
+
+            listView.Items.Clear();
+            getDirectories(pathSelectedNode);
+            getFiles(pathSelectedNode);
+        }
+
+        
+        private string getPath(TreeNode node)
+        {
+            if (node == null) return "";
+            if (node.Text.Equals(@"C:\") || node.Text.Equals(@"D:\"))
+                return node.Text + path;
             else
             {
-                return node.Text + @":\";
-            }
-
+                path = node.Text + @"\" + path ;
+                return getPath(node.Parent);
+            }                
         }
 
-        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
+        private void getDirectories(string path)
         {
-
+            if (path.Length > 0)
+            {
+                DirectoryInfo dirs = new DirectoryInfo(path);
+                foreach (DirectoryInfo dir in dirs.GetDirectories())
+                {
+                    string[] row = { dir.Name, dir.LastWriteTime.ToString() };
+                    var listViewItem = new ListViewItem(row, 0);
+                    listView.Items.Add(listViewItem);
+                }
+            }            
         }
 
-        public void listViewLoad(string Path)
+        private void getFiles(string path)
         {
-            //Path = @"D:\UIT\Storage_Data\nemiro.oauth.dll-master\examples\DropboxExample\Resources";
-            try
+            if (path.Length > 0)
             {
-                if (listView != null)
+                DirectoryInfo dir = new DirectoryInfo(path);
+                FileInfo[] Files = dir.GetFiles("*.*");
+
+                foreach (FileInfo file in Files)
                 {
-                    listView.Items.Clear();
-                    listFile.Clear();
+                    string[] row = { file.Name, file.LastWriteTime.ToString() };
+                    var listViewItem = new ListViewItem(row, 1);
+                    listView.Items.Add(listViewItem);
                 }
-                foreach (string item in Directory.GetFiles(Path))
-                {
-                    imageListIcon.Images.Add(System.Drawing.Icon.ExtractAssociatedIcon(item));
-                    FileInfo fi = new FileInfo(item);
-                    listFile.Add(fi.FullName);
-                    listView.Items.Add(fi.Name, 0);
-                }
-            }
-            catch (Exception e)
-            {
-
-            }
-        }
-
-
-        private void treeView_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
-        {
-            string path = treeView_GetPathOfNode(e.Node);
-            listViewLoad(path);
-            loadDirectories(new DirectoryInfo(path), e.Node);
-        }
-
-        private void loadDirectories(DirectoryInfo directoryPath, TreeNode node)
-        {
-            try
-            {
-                DirectoryInfo[] directories = directoryPath.GetDirectories();
-                if (directories.Length > 0 && node.Nodes.Count <= directories.Length)
-                {
-                    foreach (DirectoryInfo directory in directories)
-                    {
-                        //show directories
-                        node.Nodes.Add(directory.Name);
-                        treeView.SelectedNode = node;
-                        //treeView.Refresh();
-                        //loadDirectoriesAndFiles(directory, nodes);
-                    }
-                    //FileInfo[] files = directoryPath.GetFiles();
-                    //foreach (FileInfo file in files)
-                    //{
-                    //    //show file
-                    //    if (file.Exists)
-                    //    {
-                    //        TreeNode nodes = node.Nodes.Add(file.Name);
-                    //        SetImageExtension(file.Name, nodes);
-                    //    }
-                    //}
-                }
-                else
-                {
-                    return;
-                }
-            }
-            catch (System.UnauthorizedAccessException)
-            {
-                //return new TreeNode("Unavailable Node");
-                return;
-            }
-            catch (System.IO.PathTooLongException)
-            {
-                //return new TreeNode("Unavailable Node");
-                return;
-            }
-
+            }            
         }
     }
 }

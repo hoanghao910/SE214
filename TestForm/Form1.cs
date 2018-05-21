@@ -9,411 +9,370 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Windows.Forms;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Drive.v3;
+using Google.Apis.Drive.v3.Data;
+using Google.Apis.Services;
+using Google.Apis.Util.Store;
+using System.Threading;
+using System.Collections;
+using System.Security.Cryptography;
+using Google.Apis.Upload;
+using Google.Apis.Download;
+using TestForm.GoogleAPI;
 
 namespace MainForm
 {
     public partial class Form1 : Form
     {
+        public string[] filesName;
+        public string parentFolderId = "";
+        private static Semaphore _pool = new Semaphore(0, 1);
+        private GoogleAPI googleAPI = new GoogleAPI();        
+
         public Form1()
         {
             InitializeComponent();
         }
 
-        public List<string> listFile = new List<string>();
+        private string path = "";
+        public DriveService service;
+        public UserCredential credential;
+        private string pathSelectedPath = "";
 
-        DirectoryInfo directoryInfoC = new DirectoryInfo(@"C:\");
-        DirectoryInfo directoryInfoD = new DirectoryInfo(@"D:\");
         private void Form1_Load(object sender, EventArgs e)
         {
-            loadDirectories(directoryInfoC, treeView.Nodes[0]);
-            loadDirectories(directoryInfoD, treeView.Nodes[1]);
-            //if (Directory.Exists(@"C:\"))
+            //string[] folders = System.IO.Directory.GetDirectories(@"E:\Google Drive\Demo\", "*", System.IO.SearchOption.AllDirectories);
+
+            //foreach (var f in folders)
             //{
-            //    try
-            //    {
-            //        DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-
-            //        foreach (FileInfo file in directoryInfoC.GetFiles())
-            //        {
-            //            if (file.Exists)
-            //            {
-            //                TreeNode nodes = treeView.Nodes[0].Nodes.Add(file.Name);
-            //                SetImageExtension(file.Name, nodes);
-            //            }
-            //        }
-
-            //        if (directories.Length > 0)
-            //        {
-            //            foreach (DirectoryInfo directory in directories)
-            //            {
-            //                TreeNode node = treeView.Nodes[0].Nodes.Add(directory.Name);
-            //                node.ImageIndex = node.SelectedImageIndex = 0;
-            //                foreach (FileInfo file in directory.GetFiles())
-            //                {
-            //                    if (file.Exists)
-            //                    {
-            //                        TreeNode nodes = treeView.Nodes[0].Nodes[node.Index].Nodes.Add(file.Name);
-            //                        SetImageExtension(file.Name, nodes);
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show(ex.Message);
-            //    }
-            //}
-            //if (Directory.Exists(@"D:\"))
-            //{
-            //    try
-            //    {
-            //        DirectoryInfo[] directories = directoryInfoD.GetDirectories();
-
-            //        foreach (FileInfo file in directoryInfoD.GetFiles())
-            //        {
-            //            if (file.Exists)
-            //            {
-            //                TreeNode nodes = treeView.Nodes[1].Nodes.Add(file.Name);
-            //                SetImageExtension(file.Name, nodes);
-            //            }
-            //        }
-
-            //        if (directories.Length > 0)
-            //        {
-            //            foreach (DirectoryInfo directory in directories)
-            //            {
-            //                TreeNode node = treeView.Nodes[1].Nodes.Add(directory.Name);
-            //                node.ImageIndex = node.SelectedImageIndex = 0;
-            //                foreach (FileInfo file in directory.GetFiles())
-            //                {
-            //                    if (file.Exists)
-            //                    {
-            //                        TreeNode nodes = treeView.Nodes[1].Nodes[node.Index].Nodes.Add(file.Name);
-            //                        SetImageExtension(file.Name, nodes);
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        MessageBox.Show(ex.Message);
-            //    }
+            //    Console.WriteLine("folder name {0}", f);
             //}
 
-            //listViewLoad("");
+            CreateIfMissing();
+            TreeNode rootC = new TreeNode(@"C:\");
+            TreeNode rootD = new TreeNode(@"D:\");
+            treeView.Nodes.Add(rootC);
+            treeView.Nodes.Add(rootD);
+            FillChildNodes(rootC);
+            FillChildNodes(rootD);
+            googleAPI.loginGoogleDrive(googleAPI.getdefaultEmail());          
         }
-
-        private void toolStripMenuItemCopy_Click(object sender, EventArgs e)
+        
+        // kiem tra da co folder google drive hay chua
+        private void CreateIfMissing()
         {
-            if (treeView.SelectedNode != null)
+            string path = @"D:\Google Drive";
+            if (!Directory.Exists(path))
             {
-                try
-                {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    foreach (FileInfo file in directoryInfoC.GetFiles())
-                    {
-                        if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                        {
-                            StringCollection filePath = new StringCollection();
-                            filePath.Add(file.FullName);
-                            Clipboard.SetFileDropList(filePath);
-                        }
-                    }
-
-                    if (directories.Length > 0)
-                    {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            if (directory.Name == treeView.SelectedNode.Text)
-                            {
-                                StringCollection folderPath = new StringCollection();
-                                folderPath.Add(directory.FullName);
-                                Clipboard.SetFileDropList(folderPath);
-                            }
-
-                            foreach (FileInfo file in directory.GetFiles())
-                            {
-                                if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                                {
-                                    StringCollection filePath = new StringCollection();
-                                    filePath.Add(file.FullName);
-                                    Clipboard.SetFileDropList(filePath);
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
+                 Directory.CreateDirectory(path);
             }
         }
 
-        private void toolStripMenuItemPaste_Click(object sender, EventArgs e)
+        // them cac child nodes vao o dia C, D
+        public void FillChildNodes(TreeNode node)
         {
-            if (treeView.SelectedNode != null)
+            try
             {
-                bool copy = false;
-                try
+                DirectoryInfo dirs = new DirectoryInfo(node.FullPath);
+                foreach (DirectoryInfo dir in dirs.GetDirectories())
                 {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    if (directories.Length > 0)
+                    TreeNode newnode = null;
+                    if(dir.Name.Equals("Google Drive"))
                     {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            if (directory.Name == treeView.SelectedNode.Text && Clipboard.ContainsFileDropList())
-                            {
-                                foreach (string file in Clipboard.GetFileDropList())
-                                {
-                                    string targetDir = directoryInfoC.FullName + @"\" + directory.Name;
-                                    File.Copy(Path.Combine(file.Replace(Path.GetFileName(file), ""), Path.GetFileName(file)), Path.Combine(targetDir, Path.GetFileName(file)), true);
-                                }
-                                copy = true;
-                            }
-                        }
-                    }
-
-                    if (copy)
-                    {
-                        foreach (string file in Clipboard.GetFileDropList())
-                        {
-                            TreeNode node = treeView.Nodes[0].Nodes[treeView.SelectedNode.Index].Nodes.Add(Path.GetFileName(file));
-                            SetImageExtension(file, node);
-                        }
-                        copy = false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    copy = false;
-                    MessageBox.Show(ex.Message);
-                }
-            }
-        }
-
-        private void toolStripMenuItemDelete_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                bool deleted = false;
-                try
-                {
-                    DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-                    foreach (FileInfo file in directoryInfoC.GetFiles())
-                    {
-                        if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                        {
-                            file.Delete();
-                            deleted = true;
-                        }
-                    }
-
-                    if (directories.Length > 0)
-                    {
-                        foreach (DirectoryInfo directory in directories)
-                        {
-                            foreach (FileInfo file in directory.GetFiles())
-                            {
-                                if (file.Exists && file.Name == treeView.SelectedNode.Text)
-                                {
-                                    file.Delete();
-                                    deleted = true;
-                                }
-                            }
-
-                            if (treeView.SelectedNode.Text == directory.Name)
-                            {
-                                foreach (FileInfo file in directory.GetFiles())
-                                {
-                                    if (file.Exists)
-                                        file.Delete();
-                                }
-                                directory.Delete();
-                                deleted = true;
-                            }
-                        }
-                    }
-
-                    if (deleted)
-                        treeView.SelectedNode.Remove();
-                }
-                catch (Exception ex)
-                {
-                    deleted = false;
-                    MessageBox.Show(ex.Message);
-                }
-            }
-        }
-
-        ExplorerProperties properties;
-        private void toolStripMenuItemProperties_Click(object sender, EventArgs e)
-        {
-            if (treeView.SelectedNode != null)
-            {
-                if (properties != null)
-                    properties.Close();
-
-                DirectoryInfo[] directories = directoryInfoC.GetDirectories();
-
-                foreach (DirectoryInfo directory in directories)
-                {
-                    if (!treeView.SelectedNode.Text.Contains(".")) // Folder, not a file
-                    {
-                        if (directory.Name == treeView.SelectedNode.Text)
-                        {
-                            properties = new ExplorerProperties(directory.Name, directory.FullName, CalculateBytes(directory.GetFiles("*.*", SearchOption.AllDirectories).Sum(file => file.Length)) + " (" + directory.GetFiles("*.*", SearchOption.AllDirectories).Sum(file => file.Length).ToString() + " bytes)");
-                            properties.Show();
-                        }
+                        newnode = new TreeNode(dir.Name, 4, 4);
+                        newnode.Tag = googleAPI.getGoogleDriveRoot();
                     }
                     else
                     {
-                        foreach (FileInfo file in directoryInfoC.GetFiles())
-                        {
-                            if (file.Name == treeView.SelectedNode.Text)
-                            {
-                                properties = new ExplorerProperties(file.Name, file.FullName, CalculateBytes(file.Length) + " (" + file.Length + " bytes)");
-                                properties.Show();
-                                return;
-                            }
-                        }
-
-                        foreach (FileInfo file in directory.GetFiles())
-                        {
-                            if (file.Name == treeView.SelectedNode.Text)
-                            {
-                                properties = new ExplorerProperties(file.Name, file.FullName, CalculateBytes(file.Length) + " (" + file.Length + " bytes)");
-                                properties.Show();
-                            }
-                        }
+                        newnode = new TreeNode(dir.Name);
                     }
+                    node.Nodes.Add(newnode);
+                    newnode.Nodes.Add("*");
+                    //newnode.
                 }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message.ToString());
             }
         }
 
-        #region Calculation
-        private string CalculateBytes(long count)
+        private void treeView_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
-            string[] sizeNames = { " B", " KB", " MB", " GB", " TB", " PB", " EB" };
-            if (count == 0)
-                return "0" + sizeNames[0];
-            long bytes = Math.Abs(count);
-            int log = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
-            double number = Math.Round(bytes / Math.Pow(1024, log), 1);
-            return (Math.Sign(count) * number).ToString() + sizeNames[log];
-        }
-        #endregion
 
-        #region Extensions
-        private void SetImageExtension(string name, TreeNode _node)
-        {
-            if (name.Contains("xml"))
-                _node.ImageIndex = _node.SelectedImageIndex = 2;
-            else if (name.Contains("txt"))
-                _node.ImageIndex = _node.SelectedImageIndex = 3;
-        }
-        #endregion
-
-        private void treeView_AfterSelect(object sender, TreeViewEventArgs e)
-        {
-            listViewLoad(treeView_GetPathOfNode(e.Node));
-
-        }
-
-        private string treeView_GetPathOfNode(TreeNode node)
-        {
-            if (node.Text != "C" && node.Text != "D")
+            if (e.Node.Nodes[0].Text == "*" && e.Node.Tag != null && e.Node.Text.Equals(googleAPI.getGoogleDriveName()))
             {
-                return treeView_GetPathOfNode(node.Parent) + @"\" + node.Text;
+                e.Node.Nodes.Clear();
+                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), googleAPI.getGoogleDriveRoot(), true);
+            }
+            if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0)
+            {
+                e.Node.Nodes.Clear();
+                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), true);
+            }
+            else if (e.Node.Nodes[0].Text == "*")
+            {
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
+            }
+        }
+
+        private void treeView_BeforeSelect(object sender, TreeViewCancelEventArgs e)
+        {
+            path = "";
+            pathSelectedPath = getPath(e.Node);
+            if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0)
+            {
+                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), false);
+                var files = googleAPI.getFilesListFromGGD(e.Node.Tag.ToString(), false);
+                //string name = files.
+                
+                return;
+            }          
+            listView.Items.Clear();
+            getDirectories(pathSelectedPath);
+            getFiles(pathSelectedPath);
+        }
+        
+        // lay duong dan folder bang de quy
+        private string getPath(TreeNode node)
+        {
+            if (node == null) return "";
+            if (node.Text.Equals(@"C:\") || node.Text.Equals(@"D:\"))
+                return node.Text + path;
+            else
+            {
+                path = node.Text + @"\" + path ;
+                return getPath(node.Parent);
+            }                
+        }
+
+        // lay danh sach folder
+        private void getDirectories(string path)
+        {
+            if (path.Length > 0)
+            {
+                DirectoryInfo dirs = new DirectoryInfo(path);
+                foreach (DirectoryInfo dir in dirs.GetDirectories())
+                {
+                    string[] row = { dir.Name, dir.LastWriteTime.ToString() };
+                    var listViewItem = new ListViewItem(row, 0);
+                    listView.Items.Add(listViewItem);
+                }
+            }            
+        }
+
+        // lay danh sach file
+        private void getFiles(string path)
+        {
+            if (path.Length > 0)
+            {
+                DirectoryInfo dir = new DirectoryInfo(path);
+                FileInfo[] Files = dir.GetFiles("*.*");
+
+                foreach (FileInfo file in Files)
+                {
+                    string[] row = { file.Name, file.LastWriteTime.ToString() };
+                    var listViewItem = new ListViewItem(row, 1);
+                    listView.Items.Add(listViewItem);
+                }
+            }            
+        }
+
+        private void emailgoogledrive_Click(object sender, EventArgs e)
+        {
+            TestForm.GoogleDrive googleDriveForm = new TestForm.GoogleDrive();
+            googleDriveForm.ShowDialog();            
+        }
+
+        // bo file cua google drive vao listview
+        private void loadFileGoogleDrive(TreeNode node, string email, string folderId, bool isFolder)
+        {                                    
+            var files = googleAPI.getFilesListFromGGD(folderId, isFolder);
+            Console.WriteLine("Files:");
+            files.Where(x => x.MimeType.Contains("folder")).ToList();
+            if (files != null && files.Count > 0)
+            {
+                foreach (var file in files)
+                {
+                    Console.WriteLine("{0} ({1})", file.Name, file.Id);                    
+                }
             }
             else
             {
-                return node.Text + @":\";
+                Console.WriteLine("No files found.");
             }
-
-        }
-
-        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-
-        }
-
-        public void listViewLoad(string Path)
-        {
-            //Path = @"D:\UIT\Storage_Data\nemiro.oauth.dll-master\examples\DropboxExample\Resources";
-            try
+            Console.Read();
+            if (isFolder)
             {
-                if (listView != null)
+                TreeNode newnode;
+
+                foreach (var item in files)
                 {
-                    listView.Items.Clear();
-                    listFile.Clear();
-                }
-                foreach (string item in Directory.GetFiles(Path))
-                {
-                    imageListIcon.Images.Add(System.Drawing.Icon.ExtractAssociatedIcon(item));
-                    FileInfo fi = new FileInfo(item);
-                    listFile.Add(fi.FullName);
-                    listView.Items.Add(fi.Name, 0);
-                }
-            }
-            catch (Exception e)
-            {
-
-            }
-        }
-
-
-        private void treeView_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
-        {
-            string path = treeView_GetPathOfNode(e.Node);
-            listViewLoad(path);
-            loadDirectories(new DirectoryInfo(path), e.Node);
-        }
-
-        private void loadDirectories(DirectoryInfo directoryPath, TreeNode node)
-        {
-            try
-            {
-                DirectoryInfo[] directories = directoryPath.GetDirectories();
-                if (directories.Length > 0 && node.Nodes.Count <= directories.Length)
-                {
-                    foreach (DirectoryInfo directory in directories)
+                    if (item.MimeType.Contains("folder"))
                     {
-                        //show directories
-                        node.Nodes.Add(directory.Name);
-                        treeView.SelectedNode = node;
-                        //treeView.Refresh();
-                        //loadDirectoriesAndFiles(directory, nodes);
+                        newnode = new TreeNode(item.Name, 0, 0);
+                        newnode.Tag = item.Id;
+                        node.Nodes.Add(newnode);
+                        newnode.Nodes.Add("*");
                     }
-                    //FileInfo[] files = directoryPath.GetFiles();
-                    //foreach (FileInfo file in files)
-                    //{
-                    //    //show file
-                    //    if (file.Exists)
-                    //    {
-                    //        TreeNode nodes = node.Nodes.Add(file.Name);
-                    //        SetImageExtension(file.Name, nodes);
-                    //    }
-                    //}
+                }
+            }
+            else
+            {
+                listView.Items.Clear();
+                foreach (var item in files)
+                {
+                    if (item.MimeType.Contains("folder"))
+                    {
+                        string[] row = { item.Name, item.ModifiedTime.ToString() };
+                        var listViewItem = new ListViewItem(row, 0);
+                        //listView.Tag = item.Id + "@" + item.MimeType;
+                        listView.Items.Add(listViewItem);
+                    }
+                }
+                foreach (var item in files)
+                {
+                    if (!item.MimeType.Contains("folder"))
+                    {
+                        string[] row = { item.Name, item.ModifiedTime.ToString() };
+                        var listViewItem = new ListViewItem(row, 1);
+                        listViewItem.Tag = item.Id;
+                        //listViewItem.Tag = item.Id + "@" + item.MimeType;
+                        listView.Items.Add(listViewItem);
+                    }
+                }
+            }
+            
+        }
+
+        private void toolStripMenuItemProperties_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog openFileDialog1 = new OpenFileDialog();
+
+            openFileDialog1.InitialDirectory = "c:\\";
+            openFileDialog1.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*";
+            openFileDialog1.FilterIndex = 2;
+            openFileDialog1.RestoreDirectory = true;
+            openFileDialog1.Multiselect = true;
+
+            if (openFileDialog1.ShowDialog() == DialogResult.OK)
+            {
+                filesName = openFileDialog1.FileNames;
+                parentFolderId = treeView.SelectedNode.Tag.ToString();
+                Thread threadUploadFiles = new Thread(threadUploadFile);
+                threadUploadFiles.Start();
+                _pool.WaitOne(); // cho thread chay xong, sau khi thread release
+                MessageBox.Show("Upload success!!");
+            }
+        }
+
+        // tao thread de upload file len google drive
+        public void threadUploadFile()
+        {
+            var files = googleAPI.getFilesListFromGGD(parentFolderId, false);            
+            foreach (String file in filesName)
+            {                
+                FileInfo fileInfo = new FileInfo(file);
+                var aFile = files.Where(x => x.Name.Equals(Path.GetFileName(file))).FirstOrDefault();
+                if (aFile == null)
+                {
+                    googleAPI.uploadFile(file, parentFolderId, googleAPI.getdefaultEmail());
+                    if (listView.InvokeRequired && aFile == null)
+                    {
+                        listView.Invoke(new MethodInvoker(delegate
+                        {
+                            string[] row = { Path.GetFileName(Path.GetFileName(file)),
+                                fileInfo.LastWriteTime.ToString() };
+                            var listViewItem = new ListViewItem(row, 1);
+                            listView.Items.Add(listViewItem);
+                        }));
+                    }
                 }
                 else
                 {
-                    return;
+                    string md5 = CalculateMD5(file);
+                    //không phải folder, cùng tên file, ngày của file trên đĩa mới hơn ngày trên goolge drive
+                    //và checksum md5 khác nhau (nghĩa là file có thay đổi)
+                    var fileUpdate = files.Where(x => !x.MimeType.Contains("folder") && 
+                            x.Name.Equals(Path.GetFileName(file)) &&
+                            fileInfo.LastWriteTime > x.ModifiedTime && 
+                            !x.Md5Checksum.Equals(md5)).FirstOrDefault();
+                    if(fileUpdate != null)
+                    {                        
+                        googleAPI.updateFile(file, aFile.Id);
+                        if (listView.InvokeRequired && aFile == null)
+                        {
+                            listView.Invoke(new MethodInvoker(delegate
+                            {
+                                string[] row = { Path.GetFileName(Path.GetFileName(file)),
+                                fileInfo.LastWriteTime.ToString() };
+                                var listViewItem = new ListViewItem(row, 1);
+                                listView.Items.Add(listViewItem);
+                            }));
+                        }
+                    }
+                }                
+            }
+            _pool.Release();
+        }
+
+        // checksum
+        private string CalculateMD5(string filename)
+        {
+            using (var md5 = MD5.Create())
+            {
+                using (var stream = System.IO.File.OpenRead(filename))
+                {
+                    var hash = md5.ComputeHash(stream);
+                    return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
                 }
             }
-            catch (System.UnauthorizedAccessException)
-            {
-                //return new TreeNode("Unavailable Node");
-                return;
-            }
-            catch (System.IO.PathTooLongException)
-            {
-                //return new TreeNode("Unavailable Node");
-                return;
-            }
-
         }
-    }
+
+        public List<string> listString = new List<string>();
+
+        // download file tu google drive
+        private void downloadToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!Directory.Exists(pathSelectedPath))
+            {
+                Directory.CreateDirectory(pathSelectedPath);
+            }
+            
+            foreach (ListViewItem item in listView.SelectedItems)
+            {
+                string tag = item.Tag.ToString();
+
+                string name = item.Text;
+
+                listString.Add(tag + "@" + name);
+            }
+            Thread threadUploadFiles = new Thread(threadDownloadFile);
+            threadUploadFiles.Start();
+        }
+
+        public void threadDownloadFile()
+        {
+            string[] array;
+            
+            foreach (var item in listString)
+            {
+                array = item.Split('@');      
+                if (array[0] != null)
+                {
+                    googleAPI.downloadFile(array[0], pathSelectedPath, array[1]);
+                }
+            }
+        }
+
+        private void listView_MouseDown(object sender, MouseEventArgs e)
+        {
+            if(e.Button == MouseButtons.Right && treeView.SelectedNode.Tag != null)
+            {
+                contextMenuStrip.Show(Cursor.Position);
+            }
+        }        
+    }    
 }

@@ -13,6 +13,9 @@ namespace MainForm
         [STAThread]
         static void Main()
         {
+            string strCmdText;
+            strCmdText = @"/C subst Z: D:\GoogleDrive";
+            System.Diagnostics.Process.Start("CMD.exe", strCmdText);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Form1());

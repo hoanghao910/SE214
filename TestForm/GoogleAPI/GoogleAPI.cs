@@ -120,7 +120,7 @@ namespace TestForm.GoogleAPI
             }
             catch(Exception e)
             {                
-                MessageBox.Show("Vui lòng đăng nhập");
+                //MessageBox.Show("Vui lòng đăng nhập");
                 return new List<Google.Apis.Drive.v3.Data.File>();
             }
             
@@ -152,6 +152,7 @@ namespace TestForm.GoogleAPI
                             file.Close();
                             stream.Close();
                             Console.WriteLine("Download complete.");
+                            MessageBox.Show("Download success!!");
                             break;
                         }
                     case DownloadStatus.Failed:

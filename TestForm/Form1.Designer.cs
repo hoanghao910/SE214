@@ -32,8 +32,7 @@ namespace MainForm
         {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
-            System.Windows.Forms.TreeNode treeNode1 = new System.Windows.Forms.TreeNode("Drop Box");
-            System.Windows.Forms.TreeNode treeNode2 = new System.Windows.Forms.TreeNode("One Drive");
+            System.Windows.Forms.TreeNode treeNode1 = new System.Windows.Forms.TreeNode("One Drive");
             this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.toolStripMenuItemProperties = new System.Windows.Forms.ToolStripMenuItem();
             this.downloadToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -87,6 +86,7 @@ namespace MainForm
             this.imageList.Images.SetKeyName(2, "xml-file.png");
             this.imageList.Images.SetKeyName(3, "txt-file.png");
             this.imageList.Images.SetKeyName(4, "Google-Drive-icon.png");
+            this.imageList.Images.SetKeyName(5, "dropbox.png");
             // 
             // imageListIcon
             // 
@@ -103,13 +103,10 @@ namespace MainForm
             this.treeView.ImageList = this.imageList;
             this.treeView.Location = new System.Drawing.Point(0, 0);
             this.treeView.Name = "treeView";
-            treeNode1.Name = "dropbox";
-            treeNode1.Text = "Drop Box";
-            treeNode2.Name = "onedrive";
-            treeNode2.Text = "One Drive";
+            treeNode1.Name = "onedrive";
+            treeNode1.Text = "One Drive";
             this.treeView.Nodes.AddRange(new System.Windows.Forms.TreeNode[] {
-            treeNode1,
-            treeNode2});
+            treeNode1});
             this.treeView.SelectedImageIndex = 0;
             this.treeView.Size = new System.Drawing.Size(374, 595);
             this.treeView.TabIndex = 0;

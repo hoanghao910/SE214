@@ -20,6 +20,9 @@ using System.Security.Cryptography;
 using Google.Apis.Upload;
 using Google.Apis.Download;
 using TestForm.GoogleAPI;
+using TestForm.Dropbox;
+using System.Threading.Tasks;
+using Dropbox.Api;
 
 namespace MainForm
 {
@@ -28,7 +31,9 @@ namespace MainForm
         public string[] filesName;
         public string parentFolderId = "";
         private static Semaphore _pool = new Semaphore(0, 1);
-        private GoogleAPI googleAPI = new GoogleAPI();        
+        private GoogleAPI googleAPI = new GoogleAPI();
+        private DropboxAPI dropboxAPI = new DropboxAPI();
+        private DropboxClient dbx;
 
         public Form1()
         {
@@ -42,36 +47,41 @@ namespace MainForm
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            //string[] folders = System.IO.Directory.GetDirectories(@"E:\Google Drive\Demo\", "*", System.IO.SearchOption.AllDirectories);
-
-            //foreach (var f in folders)
-            //{
-            //    Console.WriteLine("folder name {0}", f);
-            //}
             runDOS();
+
+            dbx = new DropboxClient("Uy12UHa2IsAAAAAAAAAAaVCDOf-IPuQGbefknfPS8ADzoXkcctW9Jv1jnGKWi8Nk");
             CreateIfMissing();
             TreeNode rootC = new TreeNode(@"C:\");
             TreeNode rootD = new TreeNode(@"D:\");
             TreeNode rootZ = new TreeNode(@"Z:\", 4, 4);
+            TreeNode rootY = new TreeNode(@"Y:\", 5, 5);
             rootZ.Tag = googleAPI.getGoogleDriveRoot();
+            rootY.Tag = dropboxAPI.getDropboxRoot();
             treeView.Nodes.Add(rootC);
             treeView.Nodes.Add(rootD);
             treeView.Nodes.Add(rootZ);
+            treeView.Nodes.Add(rootY);
             FillChildNodes(rootC);
             FillChildNodes(rootD);
             FillChildNodes(rootZ);
+            FillChildNodes(rootY);
 
             //đọc file gd.txt, nếu có email thì login còn không thì thôi
             checkFile();
         }
-        
+
         // kiem tra da co folder google drive hay chua
         private void CreateIfMissing()
         {
             string path = @"D:\GoogleDrive";
             if (!Directory.Exists(path))
             {
-                 Directory.CreateDirectory(path);
+                Directory.CreateDirectory(path);
+            }
+            path = @"D:\Dropbox";
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
             }
         }
 
@@ -84,10 +94,15 @@ namespace MainForm
                 foreach (DirectoryInfo dir in dirs.GetDirectories())
                 {
                     TreeNode newnode = null;
-                    if(dir.Name.Equals("GoogleDrive"))
+                    if (dir.Name.Equals("GoogleDrive"))
                     {
                         newnode = new TreeNode(dir.Name, 4, 4);
                         newnode.Tag = googleAPI.getGoogleDriveRoot();
+                    }
+                    else if (dir.Name.Equals("Dropbox"))
+                    {
+                        newnode = new TreeNode(dir.Name, 5, 5);
+                        newnode.Tag = dropboxAPI.getDropboxRoot();
                     }
                     else
                     {
@@ -107,17 +122,19 @@ namespace MainForm
         }
 
         private void treeView_BeforeExpand(object sender, TreeViewCancelEventArgs e)
-        {    
-            if (e.Node.Nodes[0].Text == "*" && e.Node.Tag != null && e.Node.Text.Equals(googleAPI.getGoogleDriveName()))
+        {
+            if (e.Node.Nodes[0].Text == "*" && e.Node.Tag != null)
             {
-                e.Node.Nodes.Clear();
-                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), googleAPI.getGoogleDriveRoot(), true);
-            }
-            if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0)
-            {
-                e.Node.Nodes.Clear();
-                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), true);
-                var files = googleAPI.getFilesListFromGGD(e.Node.Tag.ToString(), false);//added
+                if (isDropboxTag(e.Node.Tag.ToString()))
+                {
+                    e.Node.Nodes.Clear();
+                    loadFileDropbox(e.Node, getDropboxPath(e.Node.FullPath));
+                }
+                else
+                {
+                    e.Node.Nodes.Clear();
+                    loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), true);
+                }
             }
             else if (e.Node.Nodes[0].Text == "*")
             {
@@ -130,35 +147,67 @@ namespace MainForm
         {
             path = "";
             pathSelectedPath = getPath(e.Node);
-            if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0)
+            if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0 && !isDropboxTag(e.Node.Tag.ToString()))
             {
                 loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), false);
                 var files = googleAPI.getFilesListFromGGD(e.Node.Tag.ToString(), false);
-                //string name = files.
-                
                 return;
-            }          
+            }
+            if (e.Node.Tag != null && isDropboxTag(e.Node.Tag.ToString()))
+            {
+                loadFileDropbox(e.Node, getDropboxPath(pathSelectedPath));
+                return;
+            }
             listView.Items.Clear();
             getDirectories(pathSelectedPath);
             getFiles(pathSelectedPath);
         }
-        
+
         // lay duong dan folder bang de quy
         private string getPath(TreeNode node)
         {
             if (node == null) return "";
-            if (node.Text.Equals(@"C:\") || node.Text.Equals(@"D:\") || node.Text.Equals(@"Z:\"))
+            if (node.Text.Equals(@"C:\") || node.Text.Equals(@"D:\") || node.Text.Equals(@"Z:\") || node.Text.Equals(@"Y:\"))
                 return node.Text + path;
             else
             {
-                path = node.Text + @"\" + path ;
+                path = node.Text + @"\" + path;
                 return getPath(node.Parent);
-            }                
+            }
+        }
+
+        private string getDropboxPath(string path)
+        {
+            string dxPath = path;
+            dxPath = dxPath.Replace("\\\\", "\\");
+            dxPath = dxPath.Remove(0, "Y:".Length);
+            //if (dxPath == String.Empty)
+            //{
+            //    dxPath = "/";
+            //}
+            //dxPath = dxPath.Replace("\\\\", "/");
+            dxPath = dxPath.Replace("\\", "/");
+            Console.WriteLine("=========" + dxPath);
+
+            return dxPath;
+        }
+
+        private bool isDropboxTag(string tag)
+        {
+            if (tag.Contains("/") || tag == dropboxAPI.getDropboxName())
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         // lay danh sach folder
         private void getDirectories(string path)
         {
+            path = path.Replace("\\", "/");
             if (path.Length > 0)
             {
                 DirectoryInfo dirs = new DirectoryInfo(path);
@@ -168,7 +217,7 @@ namespace MainForm
                     var listViewItem = new ListViewItem(row, 0);
                     listView.Items.Add(listViewItem);
                 }
-            }            
+            }
         }
 
         // lay danh sach file
@@ -185,16 +234,39 @@ namespace MainForm
                     var listViewItem = new ListViewItem(row, 1);
                     listView.Items.Add(listViewItem);
                 }
-            }            
+            }
         }
 
         private void emailgoogledrive_Click(object sender, EventArgs e)
         {
             TestForm.GoogleDrive googleDriveForm = new TestForm.GoogleDrive();
-            googleDriveForm.ShowDialog();            
+            googleDriveForm.ShowDialog();
         }
 
-        // bo file cua google drive vao listview
+        // show files dropbox
+        private async void loadFileDropbox(TreeNode node, string folder)
+        {
+            var files = await dropboxAPI.ListItemInFolder(dbx, folder);
+            listView.Items.Clear();
+            foreach (var item in files.Entries.Where(i => i.IsFolder))
+            {
+                var newnode = new TreeNode(item.Name, 0, 0);
+                newnode.Tag = dropboxAPI.getDropboxName();
+                node.Nodes.Add(newnode);
+                newnode.Nodes.Add("*");
+            }
+            foreach (var item in files.Entries.Where(i => i.IsFolder))
+            {
+                var listViewItem = new ListViewItem(item.Name, 0);
+                listView.Items.Add(listViewItem);
+            }
+            foreach (var item in files.Entries.Where(i => i.IsFile))
+            {
+                var listViewItem = new ListViewItem(item.Name, 1);
+                listViewItem.Tag = getDropboxPath(node.FullPath);
+                listView.Items.Add(listViewItem);
+            }
+        }
         private void loadFileGoogleDrive(TreeNode node, string email, string folderId, bool isFolder)
         {
             //if (TestForm.GoogleDrive.getEmail() != "")
@@ -208,7 +280,7 @@ namespace MainForm
             {
                 foreach (var file in files)
                 {
-                    Console.WriteLine("{0} ({1})", file.Name, file.Id);                    
+                    Console.WriteLine("{0} ({1})", file.Name, file.Id);
                 }
             }
             else
@@ -240,7 +312,7 @@ namespace MainForm
                     {
                         string[] row = { item.Name, item.ModifiedTime.ToString() };
                         var listViewItem = new ListViewItem(row, 0);
-                        //listView.Tag = item.Id + "@" + item.MimeType;
+                        listView.Tag = item.Id + "@" + item.MimeType;
                         listView.Items.Add(listViewItem);
                     }
                 }
@@ -251,11 +323,11 @@ namespace MainForm
                         string[] row = { item.Name, item.ModifiedTime.ToString() };
                         var listViewItem = new ListViewItem(row, 1);
                         listViewItem.Tag = item.Id;
-                        //listViewItem.Tag = item.Id + "@" + item.MimeType;
+                        listViewItem.Tag = item.Id + "@" + item.MimeType;
                         listView.Items.Add(listViewItem);
                     }
                 }
-            }            
+            }
         }
 
         private void toolStripMenuItemProperties_Click(object sender, EventArgs e)
@@ -282,9 +354,9 @@ namespace MainForm
         // tao thread de upload file len google drive
         public void threadUploadFile()
         {
-            var files = googleAPI.getFilesListFromGGD(parentFolderId, false);            
+            var files = googleAPI.getFilesListFromGGD(parentFolderId, false);
             foreach (String file in filesName)
-            {                
+            {
                 FileInfo fileInfo = new FileInfo(file);
                 var aFile = files.Where(x => x.Name.Equals(Path.GetFileName(file))).FirstOrDefault();
                 if (aFile == null)
@@ -306,12 +378,12 @@ namespace MainForm
                     string md5 = CalculateMD5(file);
                     //không phải folder, cùng tên file, ngày của file trên đĩa mới hơn ngày trên goolge drive
                     //và checksum md5 khác nhau (nghĩa là file có thay đổi)
-                    var fileUpdate = files.Where(x => !x.MimeType.Contains("folder") && 
+                    var fileUpdate = files.Where(x => !x.MimeType.Contains("folder") &&
                             x.Name.Equals(Path.GetFileName(file)) &&
-                            fileInfo.LastWriteTime > x.ModifiedTime && 
+                            fileInfo.LastWriteTime > x.ModifiedTime &&
                             !x.Md5Checksum.Equals(md5)).FirstOrDefault();
-                    if(fileUpdate != null)
-                    {                        
+                    if (fileUpdate != null)
+                    {
                         googleAPI.updateFile(file, aFile.Id);
                         if (listView.InvokeRequired && aFile == null)
                         {
@@ -324,7 +396,7 @@ namespace MainForm
                             }));
                         }
                     }
-                }                
+                }
             }
             //_pool.Release();
         }
@@ -351,7 +423,7 @@ namespace MainForm
             {
                 Directory.CreateDirectory(pathSelectedPath);
             }
-            
+
             foreach (ListViewItem item in listView.SelectedItems)
             {
                 string tag = item.Tag.ToString();
@@ -366,38 +438,40 @@ namespace MainForm
 
         public void threadDownloadFile()
         {
-            string[] array;            
-            
+            string[] array;
+
             foreach (var item in listString)
             {
                 array = item.Split('@');
                 if (array[0] != null)
                 {
-                    googleAPI.downloadFile(array[0], pathSelectedPath, array[1]);
+                    googleAPI.downloadFile(array[0], pathSelectedPath, array[2]);
                     Array.Clear(array, 0, array.Length);
                 }
-            }            
+            }
         }
 
         private void listView_MouseDown(object sender, MouseEventArgs e)
         {
-            if(e.Button == MouseButtons.Right && treeView.SelectedNode.Tag != null)
+            if (e.Button == MouseButtons.Right && treeView.SelectedNode.Tag != null)
             {
                 contextMenuStrip.Show(Cursor.Position);
             }
-        }    
-        
+        }
+
         private void runDOS()
         {
             string strCmdText;
             strCmdText = @"/C subst Z: D:\GoogleDrive";
+            System.Diagnostics.Process.Start("CMD.exe", strCmdText);
+            strCmdText = @"/C subst Z: D:\Dropbox";
             System.Diagnostics.Process.Start("CMD.exe", strCmdText);
         }
 
         private void checkFile()
         {
             string path = @".\gd.txt";
-            if(System.IO.File.Exists(path))
+            if (System.IO.File.Exists(path))
             {
                 string[] lines = System.IO.File.ReadAllLines(path);
                 foreach (string line in lines)
@@ -406,5 +480,5 @@ namespace MainForm
                 }
             }
         }
-    }    
+    }
 }

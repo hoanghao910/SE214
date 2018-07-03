@@ -42,6 +42,7 @@ namespace TestForm.Dropbox
 
         public async Task<ListFolderResult> ListItemInFolder(DropboxClient dbx, string folder)
         {
+            folder = folder.Replace("/Dropbox", string.Empty);
             if (folder == dropboxRoot || folder == dropboxName || folder == "/")
             {
                 folder = string.Empty;
@@ -53,19 +54,23 @@ namespace TestForm.Dropbox
 
         public async Task Download(DropboxClient dbx, string folder, string file)
         {
+
+            folder = folder.Replace("/Dropbox", string.Empty);
             using (var response = await dbx.Files.DownloadAsync(folder + "/" + file))
             {
-                await response.GetContentAsStringAsync();
+                byte[] result = await response.GetContentAsByteArrayAsync();
+                System.IO.File.WriteAllBytes("Y:" + folder + "/" + file, result);
                 MessageBox.Show("Download Successful!!!");
             }
         }
 
-        public async Task Upload(DropboxClient dbx, string folder, string file, string content)
+        public async Task Upload(DropboxClient dbx, string folder, string file, string path)
         {
-            using (var mem = new MemoryStream(Encoding.UTF8.GetBytes(content)))
+            folder = folder.Replace("/Dropbox", string.Empty);
+            using (var mem = new MemoryStream(System.IO.File.ReadAllBytes(path)))
             {
                 var updated = await dbx.Files.UploadAsync(
-                    folder + "/" + file,
+                    folder + file,
                     WriteMode.Overwrite.Instance,
                     body: mem);
                 MessageBox.Show("Upload Successful!!!");

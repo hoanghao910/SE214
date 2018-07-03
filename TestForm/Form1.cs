@@ -90,7 +90,10 @@ namespace MainForm
         {
             try
             {
-                DirectoryInfo dirs = new DirectoryInfo(node.FullPath);
+                string path = node.FullPath;
+                path = path.Replace("\\", "/");
+                path = path.Replace('\\', '/');
+                DirectoryInfo dirs = new DirectoryInfo(path);
                 foreach (DirectoryInfo dir in dirs.GetDirectories())
                 {
                     TreeNode newnode = null;
@@ -117,7 +120,7 @@ namespace MainForm
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message.ToString());
+                //MessageBox.Show(ex.Message.ToString());
             }
         }
 
@@ -136,7 +139,7 @@ namespace MainForm
                     loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), true);
                 }
             }
-            else if (e.Node.Nodes[0].Text == "*")
+            else if (e.Node.FirstNode == null || e.Node.FirstNode.Text == "*")
             {
                 e.Node.Nodes.Clear();
                 FillChildNodes(e.Node);
@@ -147,20 +150,41 @@ namespace MainForm
         {
             path = "";
             pathSelectedPath = getPath(e.Node);
+            if (e.Node.FirstNode != null && e.Node.FirstNode.Text == "*" && e.Node.Tag != null && e.Node.Tag.ToString().Length > 0 && !isDropboxTag(e.Node.Tag.ToString()))
+            {
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
+                loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), false);
+                var files = googleAPI.getFilesListFromGGD(e.Node.Tag.ToString(), false);
+                return;
+            }
+            if (e.Node.FirstNode != null && e.Node.FirstNode.Text == "*" && e.Node.Tag != null && isDropboxTag(e.Node.Tag.ToString()))
+            {
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
+                loadFileDropbox(e.Node, getDropboxPath(pathSelectedPath));
+                return;
+            }
             if (e.Node.Tag != null && e.Node.Tag.ToString().Length > 0 && !isDropboxTag(e.Node.Tag.ToString()))
             {
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
                 loadFileGoogleDrive(e.Node, googleAPI.getdefaultEmail(), e.Node.Tag.ToString(), false);
                 var files = googleAPI.getFilesListFromGGD(e.Node.Tag.ToString(), false);
                 return;
             }
             if (e.Node.Tag != null && isDropboxTag(e.Node.Tag.ToString()))
             {
+                e.Node.Nodes.Clear();
+                FillChildNodes(e.Node);
                 loadFileDropbox(e.Node, getDropboxPath(pathSelectedPath));
                 return;
             }
+
             listView.Items.Clear();
             getDirectories(pathSelectedPath);
             getFiles(pathSelectedPath);
+
         }
 
         // lay duong dan folder bang de quy
@@ -255,6 +279,7 @@ namespace MainForm
                 node.Nodes.Add(newnode);
                 newnode.Nodes.Add("*");
             }
+            node.Expand();
             foreach (var item in files.Entries.Where(i => i.IsFolder))
             {
                 var listViewItem = new ListViewItem(item.Name, 0);
@@ -347,13 +372,35 @@ namespace MainForm
                 Thread threadUploadFiles = new Thread(threadUploadFile);
                 threadUploadFiles.Start();
                 //_pool.WaitOne(); // cho thread chay xong, sau khi thread release
-                MessageBox.Show("Upload success!!");
+                //MessageBox.Show("Upload success!!");
             }
         }
 
         // tao thread de upload file len google drive
-        public void threadUploadFile()
+        public async void threadUploadFile()
         {
+            // Check upload dropbox
+            if (isDropboxTag(parentFolderId))
+            {
+                foreach (String file in filesName)
+                {
+                    FileInfo fileInfo = new FileInfo(file);
+                    await dropboxAPI.Upload(dbx, getDropboxPath(pathSelectedPath), fileInfo.Name, fileInfo.FullName);
+                    if (listView.InvokeRequired)
+                    {
+                        listView.Invoke(new MethodInvoker(delegate
+                        {
+                            string[] row = { Path.GetFileName(Path.GetFileName(file)),
+                                fileInfo.LastWriteTime.ToString() };
+                            var listViewItem = new ListViewItem(row, 1);
+                            listView.Items.Add(listViewItem);
+                        }));
+                    }
+                    return;
+
+                }
+            }
+
             var files = googleAPI.getFilesListFromGGD(parentFolderId, false);
             foreach (String file in filesName)
             {
@@ -436,7 +483,7 @@ namespace MainForm
             threadUploadFiles.Start();
         }
 
-        public void threadDownloadFile()
+        public async void threadDownloadFile()
         {
             string[] array;
 
@@ -445,7 +492,14 @@ namespace MainForm
                 array = item.Split('@');
                 if (array[0] != null)
                 {
-                    googleAPI.downloadFile(array[0], pathSelectedPath, array[2]);
+                    if (isDropboxTag(array[0]))
+                    {
+                        await dropboxAPI.Download(dbx, array[0], array[1]);
+                    }
+                    else
+                    {
+                        googleAPI.downloadFile(array[0], pathSelectedPath, array[2]);
+                    }
                     Array.Clear(array, 0, array.Length);
                 }
             }
